@@ -6,15 +6,8 @@ A server for Trees Against Humanity.
 
 ## Requirements
 
-1. Node.js and NPM
-2. Yarn
-3. Elm
+1. A Go installation (see how [here](https://golang.org/doc/install))
 
 ## Preparing
 
-1. Run `yarn install` to install Node.js packages.
-2. Run `elm-package install` to install Elm packages.
-
-# Running
-
-Run `yarn client` to run the web-app at [localhost:3000](http://localhost:3000).
+1. Run `go get -u .` to install Go packages.
