@@ -1,10 +1,43 @@
 package game
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/gorilla/websocket"
 )
+
+type GamePhase int
+
+const (
+	Lobby GamePhase = iota
+	RoundInProgress
+	EndOfRound
+	EndOfGame
+)
+
+func (p GamePhase) MarshalJSON() (result []byte, err error) {
+	options := [...]string{"lobby", "roundInProgress", "endOfRound", "endOfGame"}
+	result = []byte(options[p])
+	return
+}
+
+func (p *GamePhase) UnmarshalJSON(input []byte) (err error) {
+	switch input {
+	case "lobby":
+		p = Lobby
+	case "roundInProgress":
+		p = RoundInProgress
+	case "endOfRound":
+		p = EndOfRound
+	case "endOfGame":
+		p = EndOfGame
+	default:
+		err = errors.Error("Invalid GamePhase value")
+	}
+	return
+}
 
 type User struct {
 	Id       int
@@ -13,22 +46,22 @@ type User struct {
 
 type Player struct {
 	User       *User
-	Score      int
 	Connection websocket.Conn
 	Hand       []AnswerCard
+	Score      int
 }
 
 type Deck struct {
 	Id            int
+	AnswerCards   []AnswerCard
 	Name          string
 	QuestionCards []QuestionCard
-	AnswerCards   []AnswerCard
 }
 
 type QuestionCard struct {
 	Id         int
-	Text       string
 	NumAnswers int
+	Text       string
 }
 
 type AnswerCard struct {
@@ -38,17 +71,26 @@ type AnswerCard struct {
 
 type Game struct {
 	Id              int
-	Czar            *Player
+	AnswerDeck      []AnswerCard
+	AnswerDiscard   []AnswerCard
+	Decks           []Deck
+	GamePhase       GamePhase
+	MaxPoints       int
+	Name            string
 	Players         []Player
-	CurrentQuestion *QuestionCard
+	QuestionDeck    []QuestionCard
+	QuestionDiscard []QuestionCard
+	Round           *Round
 }
 
 type Round struct {
-	Winner   *Player
-	Question *QuestionCard
+	CardSubmissions []CardSubmission
+	Czar            Player
+	Question        QuestionCard
+	Winner          *Player
 }
 
 type CardSubmission struct {
-	Player *Player
 	Cards  []AnswerCard
+	Player *Player
 }
