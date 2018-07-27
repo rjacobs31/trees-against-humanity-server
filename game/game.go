@@ -9,17 +9,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const DefaultHandSize int = 10
+
 type GamePhase int
 
 const (
 	Lobby GamePhase = iota
 	RoundInProgress
+	WinnerSelection
 	EndOfRound
 	EndOfGame
 )
 
 func (p GamePhase) MarshalJSON() (result []byte, err error) {
-	options := [...]string{"lobby", "roundInProgress", "endOfRound", "endOfGame"}
+	options := [...]string{"lobby", "roundInProgress", "winnerSelection", "endOfRound", "endOfGame"}
 	result = []byte(options[p])
 	return
 }
@@ -30,6 +33,8 @@ func (p *GamePhase) UnmarshalJSON(input []byte) (err error) {
 		p = Lobby
 	case "roundInProgress":
 		p = RoundInProgress
+	case "winnerSelection":
+		p = WinnerSelection
 	case "endOfRound":
 		p = EndOfRound
 	case "endOfGame":
