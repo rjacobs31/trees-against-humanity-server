@@ -56,24 +56,6 @@ type Player struct {
 	Score int
 }
 
-type Deck struct {
-	Id            int
-	AnswerCards   []AnswerCard
-	Name          string
-	QuestionCards []QuestionCard
-}
-
-type QuestionCard struct {
-	Id         int
-	NumAnswers int
-	Text       string
-}
-
-type AnswerCard struct {
-	Id   int
-	Text string
-}
-
 type Game struct {
 	Id              int
 	AnswerDeck      []AnswerCard
