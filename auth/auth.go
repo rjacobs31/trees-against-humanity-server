@@ -4,10 +4,46 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/auth0/go-jwt-middleware"
 	"github.com/dgrijalva/jwt-go"
 )
+
+type Claims struct {
+	jwt.StandardClaims
+	Scope     string `json:"scope"`
+	populated bool
+}
+
+func (c *Claims) Populate(tokenString string) (err error) {
+	token, err := jwt.ParseWithClaims(tokenString, c, nil)
+	if err != nil {
+		return
+	}
+
+	c, ok := token.Claims.(*Claims)
+	if ok {
+		c.populated = true
+	} else {
+		err = errors.New("could not load claims")
+	}
+	return
+}
+
+func (c *Claims) CheckScope(scope string) (hasScope bool) {
+	if !c.populated {
+		return false
+	}
+
+	for _, v := range strings.Split(c.Scope, " ") {
+		if v == scope {
+			return true
+		}
+	}
+
+	return
+}
 
 type response struct {
 	Message string `json:"message"`
