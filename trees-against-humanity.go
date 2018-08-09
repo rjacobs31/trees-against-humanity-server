@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/rjacobs31/trees-against-humanity-server/auth"
+	"github.com/urfave/negroni"
 )
 
 var addr = flag.String("addr", ":8000", "http service address")
@@ -25,30 +27,46 @@ var upgrader = websocket.Upgrader{
 func main() {
 	flag.Parse()
 
-	_ = auth.Auth0Middleware(*aud, *iss)
+	authMiddleware := auth.Auth0Middleware(*aud, *iss)
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
+	r := mux.NewRouter()
+	apiRouter := r.PathPrefix("/api").Subrouter()
 
-		for {
-			// Read message from browser
-			msgType, msg, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
+	apiRouter.HandleFunc("/ws", handleWebsocket)
+	apiRouter.Handle("/test", negroni.New(
+		negroni.HandlerFunc(authMiddleware.HandlerWithNext),
+		negroni.Wrap(http.HandlerFunc(handleTest)),
+	))
 
-			// Print the message to the console
-			fmt.Printf("%s sent: %s\n", conn.RemoteAddr(), string(msg))
-
-			// Write message back to browser
-			if err = conn.WriteMessage(msgType, msg); err != nil {
-				return
-			}
-		}
-	})
-
+	http.Handle("/", r)
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
+	}
+}
+
+func handleTest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write([]byte(`{"message": "This was a triumph."}`))
+}
+
+func handleWebsocket(w http.ResponseWriter, r *http.Request) {
+	conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
+
+	for {
+		// Read message from browser
+		msgType, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		// Print the message to the console
+		fmt.Printf("%s sent: %s\n", conn.RemoteAddr(), string(msg))
+
+		// Write message back to browser
+		if err = conn.WriteMessage(msgType, msg); err != nil {
+			return
+		}
 	}
 }
