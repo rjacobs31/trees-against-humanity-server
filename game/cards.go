@@ -24,26 +24,46 @@ type AnswerCard struct {
 }
 
 type PlayDeck struct {
-	AnswerDeck      []AnswerCard
-	AnswerDiscard   []AnswerCard
+	AnswerDeck      *AnswerDeck
 	QuestionDeck    []QuestionCard
 	QuestionDiscard []QuestionCard
 }
 
+type AnswerDeck struct {
+	Deck        []AnswerCard
+	DiscardPile []AnswerCard
+}
+
 // Init sets up the PlayDeck by loading decks and emptying discard piles.
 func (p *PlayDeck) Init(decks []Deck) (err error) {
-	p.AnswerDeck = new([]AnswerCard)
-	p.AnswerDiscard = new([]AnswerCard)
+	p.AnswerDeck = new(AnswerDeck)
 	p.QuestionDeck = new([]QuestionCard)
 	p.QuestionDiscard = new([]QuestionCard)
 
+	p.AnswerDeck.Init(decks)
+
 	for _, deck := range decks {
-		p.AnswerDeck = append(p.AnswerDeck, deck.AnswerCards)
 		p.QuestionDeck = append(p.QuestionDeck, deck.QuestionCards)
 	}
 
-	shuffle(p.AnswerDeck)
 	shuffle(p.QuestionDeck)
+}
+
+func (d *AnswerDeck) Init(decks []Deck) {
+	d.Deck = new([]AnswerCard)
+	d.DiscardPile = new([]AnswerCard)
+	for _, deck := range decks {
+		p.Deck = append(p.Deck, deck.AnswerCards)
+	}
+	shuffle(d.Deck)
+}
+
+type AnswerSource interface {
+	Draw() (card AnswerCard, err error)
+}
+
+type AnswerDiscard interface {
+	Discard(card AnswerCard) (err error)
 }
 
 // DrawAnswer removes an answer card from the deck and returns it.
@@ -52,7 +72,7 @@ func (p *PlayDeck) Init(decks []Deck) (err error) {
 // and the card drawn from there.
 //
 // If both piles are empty, an error is returned.
-func (p *PlayDeck) DrawAnswer() (card AnswerCard, err error) {
+func (p *AnswerDeck) Draw() (card AnswerCard, err error) {
 	if len(p.AnswerDeck) > 0 {
 		card = p.AnswerDeck[len(p.AnswerDeck)]
 		p.AnswerDeck = p.AnswerDeck[:len(p.AnswerDeck)-1]
@@ -70,7 +90,7 @@ func (p *PlayDeck) DrawAnswer() (card AnswerCard, err error) {
 
 // DiscardAnswer takes the given card and puts it into the discard
 // pile.
-func (p *PlayDeck) DiscardAnswer(card AnswerCard) (err error) {
+func (p *AnswerDeck) Discard(card AnswerCard) (err error) {
 	p.AnswerDiscard = append(p.AnswerDiscard, card)
 }
 

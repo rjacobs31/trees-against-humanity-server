@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"rand"
 
 	"github.com/gorilla/websocket"
@@ -57,17 +58,14 @@ type Player struct {
 }
 
 type Game struct {
-	Id              int
-	AnswerDeck      []AnswerCard
-	AnswerDiscard   []AnswerCard
-	Decks           []Deck
-	GamePhase       GamePhase
-	MaxPoints       int
-	Name            string
-	Players         []Player
-	QuestionDeck    []QuestionCard
-	QuestionDiscard []QuestionCard
-	Round           *Round
+	Id        int
+	Decks     []Deck
+	GamePhase GamePhase
+	MaxPoints int
+	Name      string
+	PlayDeck  PlayDeck
+	Players   []Player
+	Round     *Round
 }
 
 func (g *Game) Start() (err error) {
@@ -75,7 +73,7 @@ func (g *Game) Start() (err error) {
 		return errors.New("max points not set")
 	}
 
-	if err = g.populateDecks(); err != nil {
+	if err = (&g.PlayDeck).Init(g.PlayDeck); err != nil {
 		return
 	}
 
@@ -86,7 +84,6 @@ func (g *Game) Start() (err error) {
 		Question: g.QuestionDeck[len(g.QuestionDeck)-1],
 	}
 	g.QuestionDeck = g.QuestionDeck[len(g.QuestionDeck)-1]
-
 }
 
 func shuffle(vals []interface{}) {
@@ -97,30 +94,6 @@ func shuffle(vals []interface{}) {
 	}
 }
 
-func (g *Game) populateDecks() (err error) {
-	if len(g.Decks) < 1 {
-		return errors.New("empty decks")
-	}
-
-	g.AnswerDeck = make([]AnswerCard, 0)
-	g.QuestionDeck = make([]QuestionCard, 0)
-
-	for _, deck := range g.Decks {
-		for _, card := range deck.AnswerCards {
-			g.AnswerDeck = append(g.AnswerDeck, card)
-		}
-		for _, card := range deck.QuestionCards {
-			g.QuestionDeck = append(g.QuestionDeck, card)
-		}
-	}
-
-	shuffle(g.AnswerDeck)
-	shuffle(g.QuestionDeck)
-
-	g.AnswerDiscard = make([]AnswerCard, 0)
-	g.QuestionDiscard = make([]QuestionCard, 0)
-}
-
 func (g *Game) DealAll(upTo int) {
 	for _, player := range g.Players {
 		g.Deal(&player)
@@ -128,13 +101,36 @@ func (g *Game) DealAll(upTo int) {
 }
 
 func (g *Game) Deal(player *Player, upTo int) {
-	if len(player.Hand) >= upTo {
-		return
-	}
-
 	numNew := len(player.Hand) - upTo
-	player.Hand = append(player.Hand, g.QuestionDeck[len(g.QuestionDeck)-numNew:])
-	g.QuestionDeck = g.QuestionDeck[:len(g.QuestionDeck)-numNew]
+	for i := 0; i < numNew; i++ {
+		card, err := g.PlayDeck.AnswerDeck.Draw()
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		player.Gain(card)
+	}
+}
+
+func (p *Player) Gain(card AnswerCard) (err error) {
+	player.Hand = append(player.Hand, card)
+}
+
+func (p *Player) Draw(source AnswerSource) {
+	card, _ := source.Draw()
+	player.Hand = append(player.Hand, card)
+}
+
+func (p *Player) Discard(discard AnswerDiscard, id int) (err error) {
+	for i := 0; i < len(p.Hand); i++ {
+		card := p.Hand[i]
+		if card.Id == id {
+			p.Hand = p.Hand[:i] + p.Hand[:i+1]
+			discard.Discard(card)
+			return
+		}
+	}
+	return errors.New("card with id not in hand")
 }
 
 type Round struct {
