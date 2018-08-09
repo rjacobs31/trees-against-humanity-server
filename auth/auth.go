@@ -9,15 +9,15 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-type Response struct {
+type response struct {
 	Message string `json:"message"`
 }
 
-type Jwks struct {
-	Keys []JSONWebKeys `json:"keys"`
+type jwks struct {
+	Keys []jsonWebKeys `json:"keys"`
 }
 
-type JSONWebKeys struct {
+type jsonWebKeys struct {
 	Kty string   `json:"kty"`
 	Kid string   `json:"kid"`
 	Use string   `json:"use"`
@@ -61,7 +61,7 @@ func getPemCert(token *jwt.Token) (cert string, err error) {
 	}
 	defer resp.Body.Close()
 
-	jwks := Jwks{}
+	jwks := jwks{}
 	err = json.NewDecoder(resp.Body).Decode(&jwks)
 	if err != nil {
 		return
