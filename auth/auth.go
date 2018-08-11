@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/auth0/go-jwt-middleware"
@@ -62,24 +63,25 @@ type jsonWebKeys struct {
 	X5c []string `json:"x5c"`
 }
 
-func Auth0Middleware(aud, iss string) (middleware *jwtmiddleware.JWTMiddleware) {
+func Auth0Middleware(expectedAud, expectedIss, authDomain string) (middleware *jwtmiddleware.JWTMiddleware) {
 	return jwtmiddleware.New(jwtmiddleware.Options{
 		SigningMethod: jwt.SigningMethodRS256,
 		ValidationKeyGetter: func(token *jwt.Token) (result interface{}, err error) {
 			result = token
-			checkAud := token.Claims.(jwt.MapClaims).VerifyAudience(aud, false)
+
+			checkAud := token.Claims.(jwt.MapClaims).VerifyAudience(expectedAud, false)
 			if !checkAud {
 				err = errors.New("invalid audience")
 				return
 			}
 
-			checkIss := token.Claims.(jwt.MapClaims).VerifyAudience(iss, false)
+			checkIss := token.Claims.(jwt.MapClaims).VerifyIssuer(expectedIss, false)
 			if !checkIss {
 				err = errors.New(("invalid issuer"))
 				return
 			}
 
-			cert, err := getPemCert(token)
+			cert, err := getPemCert(token, authDomain)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -90,8 +92,18 @@ func Auth0Middleware(aud, iss string) (middleware *jwtmiddleware.JWTMiddleware) 
 	})
 }
 
-func getPemCert(token *jwt.Token) (cert string, err error) {
-	resp, err := http.Get("https://YOUR_AUTH0_DOMAIN/.well-known/jwks.json")
+func getPemCert(token *jwt.Token, authDomain string) (cert string, err error) {
+	authUrl, err := url.Parse(authDomain)
+	if err != nil {
+		return
+	}
+
+	subUrl, err := url.Parse("/.well-known/jwks.json")
+	if err != nil {
+		return
+	}
+
+	resp, err := http.Get(authUrl.ResolveReference(subUrl).String())
 	if err != nil {
 		return
 	}

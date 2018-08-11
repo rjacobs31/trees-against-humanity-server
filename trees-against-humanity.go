@@ -15,6 +15,7 @@ import (
 var addr = flag.String("addr", ":8000", "http service address")
 var aud = flag.String("audience", "", "Auth0 audience")
 var iss = flag.String("issuer", "", "Auth0 issuer")
+var authDomain = flag.String("auth-domain", "", "Auth0 auhentication domain (defaults to iss)")
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
@@ -26,8 +27,11 @@ var upgrader = websocket.Upgrader{
 
 func main() {
 	flag.Parse()
+	if *authDomain == "" {
+		*authDomain = *iss
+	}
 
-	authMiddleware := auth.Auth0Middleware(*aud, *iss)
+	authMiddleware := auth.Auth0Middleware(*aud, *iss, *authDomain)
 
 	r := mux.NewRouter()
 	apiRouter := r.PathPrefix("/api").Subrouter()
