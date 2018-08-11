@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/rjacobs31/trees-against-humanity-server/auth"
@@ -16,6 +18,7 @@ var addr = flag.String("addr", ":8000", "http service address")
 var aud = flag.String("audience", "", "Auth0 audience")
 var iss = flag.String("issuer", "", "Auth0 issuer")
 var authDomain = flag.String("auth-domain", "", "Auth0 auhentication domain (defaults to iss)")
+var allowedOrigins = flag.String("allowed-origins", "*", "http service address")
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
@@ -42,7 +45,12 @@ func main() {
 		negroni.Wrap(http.HandlerFunc(handleTest)),
 	))
 
-	http.Handle("/", r)
+	customHandlers := handlers.CORS(
+		handlers.AllowedOrigins(strings.Split(*allowedOrigins, ",")),
+		handlers.AllowedHeaders([]string{"Access-Control-Allow-Headers", "Authorization"}),
+	)
+	http.Handle("/", customHandlers(r))
+	log.Println("Starting server at:", *addr)
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
