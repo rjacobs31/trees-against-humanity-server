@@ -11,6 +11,10 @@ import (
 // maintained in players' hands.
 const DefaultHandSize int = 10
 
+// DefaultMaxPoints is the default number of points
+// required for a player to win.
+const DefaultMaxPoints int = 5
+
 // Phase represents which phase the game is currently in.
 type Phase int
 
@@ -75,9 +79,35 @@ type Game struct {
 	Phase     Phase
 	MaxPoints int
 	Name      string
+	Owner     *Player
+	Password  string
 	PlayDeck  PlayDeck
 	Players   []Player
 	Round     *Round
+}
+
+// Create initialises a game in the `Lobby` state.
+//
+// `password` may be empty, which will mean that anyone
+// may join without a password
+func Create(id int, name, password string, owner *Player) (game *Game, err error) {
+	if len(name) < 4 {
+		return nil, errors.New("game name cannot be shorter than 4 characters")
+	}
+
+	if owner == nil {
+		return nil, errors.New("game must have an owner")
+	}
+
+	game = &Game{
+		ID:        id,
+		MaxPoints: DefaultHandSize,
+		Name:      name,
+		Password:  password,
+		Phase:     Lobby,
+	}
+
+	return game, nil
 }
 
 // Start moves the game state to `InProgress` and deals
