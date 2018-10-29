@@ -1,69 +1,138 @@
 package game
 
 import (
-	"encoding/json"
+	// Imported for the JSON marshal/unmarshal interfaces.
+	_ "encoding/json"
 	"errors"
+	"math/rand"
+	"time"
 )
 
+// Deck represents a deck of answer cards and question cards
+// before being put into play.
 type Deck struct {
-	Id            int            `json:"id"`
+	ID            int            `json:"id"`
 	AnswerCards   []AnswerCard   `json:"answerCards"`
 	Name          string         `json:"name"`
 	QuestionCards []QuestionCard `json:"questionCards"`
 }
 
+// QuestionCard represents a black question card.
 type QuestionCard struct {
-	Id         int    `json:"id"`
+	ID         int    `json:"id"`
 	NumAnswers int    `json:"numAnswers"`
 	Text       string `json:"text"`
 }
 
+// AnswerCard represents a white answer card.
 type AnswerCard struct {
-	Id   int    `json:"id"`
+	ID   int    `json:"id"`
 	Text string `json:"text"`
 }
 
+// PlayDeck contains both the answer deck and the question deck.
 type PlayDeck struct {
-	AnswerDeck      *AnswerDeck
-	QuestionDeck    []QuestionCard
-	QuestionDiscard []QuestionCard
+	AnswerDeck   CardDeck
+	QuestionDeck CardDeck
 }
 
-type AnswerDeck struct {
-	Deck        []AnswerCard
-	DiscardPile []AnswerCard
+// CardDeck represents a deck of cards, with a deck portion
+// to draw from and a discard pile to discard to.
+type CardDeck struct {
+	Deck        []interface{}
+	DiscardPile []interface{}
+}
+
+// Init initialises a card deck with the appropriate type.
+func (d *CardDeck) Init(cards []interface{}) (err error) {
+	d.Deck = cards
+	return
+}
+
+// Draw retrieves the top card in the deck and removes it.
+func (d *CardDeck) Draw() (card interface{}, err error) {
+	if len(d.Deck) < 1 {
+		return nil, errors.New("card deck empty")
+	}
+	deckLength := len(d.Deck) - 1
+	card = d.Deck[deckLength]
+	d.Deck = d.Deck[:deckLength]
+	return
+}
+
+// Discard adds a card to the discard pile.
+func (d *CardDeck) Discard(card interface{}) (err error) {
+	d.Deck = append(d.Deck, card)
+	return
+}
+
+// Shuffle randomises the order of the non-discard deck.
+func (d *CardDeck) Shuffle() {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	for n := len(d.Deck); n > 0; n-- {
+		randIndex := r.Intn(n)
+		d.Deck[n-1], d.Deck[randIndex] = d.Deck[randIndex], d.Deck[n-1]
+	}
+}
+
+// Reshuffle puts the discard pile back in the deck and shuffles.
+func (d *CardDeck) Reshuffle() {
+	d.Deck, d.DiscardPile = append(d.Deck, d.Discard), d.DiscardPile[:0]
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	for n := len(d.Deck); n > 0; n-- {
+		randIndex := r.Intn(n)
+		d.Deck[n-1], d.Deck[randIndex] = d.Deck[randIndex], d.Deck[n-1]
+	}
 }
 
 // Init sets up the PlayDeck by loading decks and emptying discard piles.
-func (p *PlayDeck) Init(decks []Deck) (err error) {
-	p.AnswerDeck = new(AnswerDeck)
-	p.QuestionDeck = new([]QuestionCard)
-	p.QuestionDiscard = new([]QuestionCard)
-
-	p.AnswerDeck.Init(decks)
-
-	for _, deck := range decks {
-		p.QuestionDeck = append(p.QuestionDeck, deck.QuestionCards)
+func (p *PlayDeck) Init(deck Deck) {
+	questionCards := make([]interface{}, 0, len(deck.QuestionCards))
+	for card := range deck.QuestionCards {
+		questionCards = append(questionCards, card)
 	}
 
-	shuffle(p.QuestionDeck)
-}
-
-func (d *AnswerDeck) Init(decks []Deck) {
-	d.Deck = new([]AnswerCard)
-	d.DiscardPile = new([]AnswerCard)
-	for _, deck := range decks {
-		p.Deck = append(p.Deck, deck.AnswerCards)
+	answerCards := make([]interface{}, 0, len(deck.AnswerCards))
+	for card := range deck.AnswerCards {
+		answerCards = append(answerCards, card)
 	}
-	shuffle(d.Deck)
+
+	p.QuestionDeck.Init([]interface{}(questionCards))
+	p.AnswerDeck.Init([]interface{}(answerCards))
+
+	p.QuestionDeck.Shuffle()
+	p.AnswerDeck.Shuffle()
 }
 
-type AnswerSource interface {
-	Draw() (card AnswerCard, err error)
+// DrawQuestion removes a question card from the deck and returns it.
+//
+// If there are no more cards in the deck, the discard pile is shuffled
+// and the card drawn from there.
+//
+// If both piles are empty, an error is returned.
+func (p *PlayDeck) DrawQuestion() (card *QuestionCard, err error) {
+	if len(p.QuestionDeck.Deck) < 1 {
+		p.QuestionDeck.Reshuffle()
+	}
+
+	drawnCard, err := p.QuestionDeck.Draw()
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := drawnCard.(type) {
+	case *QuestionCard:
+		return v, nil
+	default:
+		return nil, errors.New("non-question card returned")
+	}
 }
 
-type AnswerDiscard interface {
-	Discard(card AnswerCard) (err error)
+// DiscardQuestion takes the given card and puts it into the discard
+// pile.
+func (p *PlayDeck) DiscardQuestion(card QuestionCard) (err error) {
+	p.QuestionDeck.Discard(card)
+	return nil
 }
 
 // DrawAnswer removes an answer card from the deck and returns it.
@@ -72,54 +141,29 @@ type AnswerDiscard interface {
 // and the card drawn from there.
 //
 // If both piles are empty, an error is returned.
-func (p *AnswerDeck) Draw() (card AnswerCard, err error) {
-	if len(p.AnswerDeck) > 0 {
-		card = p.AnswerDeck[len(p.AnswerDeck)]
-		p.AnswerDeck = p.AnswerDeck[:len(p.AnswerDeck)-1]
-		return
-	} else if len(p.AnswerDiscard) > 0 {
-		p.AnswerDeck, p.AnswerDiscard = p.AnswerDiscard[:], new([]AnswerCard)
-		shuffle(p.AnswerDeck)
-		card = p.AnswerDeck[len(p.AnswerDeck)]
-		p.AnswerDeck = p.AnswerDeck[:len(p.AnswerDeck)-1]
-		return
+func (p *PlayDeck) DrawAnswer() (card *AnswerCard, err error) {
+	if len(p.AnswerDeck.Deck) < 1 {
+		p.AnswerDeck.Reshuffle()
 	}
 
-	return nil, errors.New("answers deck and discard empty")
+	drawnCard, err := p.AnswerDeck.Draw()
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := drawnCard.(type) {
+	case *AnswerCard:
+		return v, nil
+	default:
+		return nil, errors.New("non-answer card returned")
+	}
 }
 
 // DiscardAnswer takes the given card and puts it into the discard
 // pile.
-func (p *AnswerDeck) Discard(card AnswerCard) (err error) {
-	p.AnswerDiscard = append(p.AnswerDiscard, card)
-}
-
-// DrawQuestion removes an answer card from the deck and returns it.
-//
-// If there are no more cards in the deck, the discard pile is shuffled
-// and the card drawn from there.
-//
-// If both piles are empty, an error is returned.
-func (p *PlayDeck) DrawQuestion() (card QuestionCard, err error) {
-	if len(p.QuestionDeck) > 0 {
-		card = p.QuestionDeck[len(p.QuestionDeck)]
-		p.QuestionDeck = p.QuestionDeck[:len(p.QuestionDeck)-1]
-		return
-	} else if len(p.QuestionDiscard) > 0 {
-		p.QuestionDeck, p.QuestionDiscard = p.QuestionDiscard[:], new([]QuestionCard)
-		shuffle(p.QuestionDeck)
-		card = p.QuestionDeck[len(p.QuestionDeck)]
-		p.QuestionDeck = p.QuestionDeck[:len(p.QuestionDeck)-1]
-		return
-	}
-
-	return nil, errors.New("answers deck and discard empty")
-}
-
-// DiscardQuestion takes the given card and puts it into the discard
-// pile.
-func (p *PlayDeck) DiscardQuestion(card QuestionCard) (err error) {
-	p.QuestionDiscard = append(p.QuestionDiscard, card)
+func (p *PlayDeck) DiscardAnswer(card AnswerCard) (err error) {
+	p.AnswerDeck.Discard(card)
+	return nil
 }
 
 func shuffle(vals []interface{}) {
