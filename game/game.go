@@ -1,66 +1,78 @@
 package game
 
 import (
-	"encoding/json"
+	// Imported for the JSON marshal/unmarshal interfaces.
+	_ "encoding/json"
 	"errors"
-	"io"
 	"log"
-	"rand"
-
-	"github.com/gorilla/websocket"
 )
 
+// DefaultHandSize is the default number of cards
+// maintained in players' hands.
 const DefaultHandSize int = 10
 
-type GamePhase int
+// Phase represents which phase the game is currently in.
+type Phase int
 
 const (
-	Lobby GamePhase = iota
+	// Lobby is when play has yet to start.
+	Lobby Phase = iota
+
+	// RoundInProgress is when awaiting player card submissions.
 	RoundInProgress
+
+	// WinnerSelection is when the Czar is meant to select a winning card.
 	WinnerSelection
+
+	// EndOfRound is when the round is over, but the next has yet to begin.
 	EndOfRound
+
+	// EndOfGame is when the game is over and further action is required.
 	EndOfGame
 )
 
-func (p GamePhase) MarshalJSON() (result []byte, err error) {
+// MarshalJSON attempts to serialise the phase as a JSON string.
+func (p Phase) MarshalJSON() (result []byte, err error) {
 	options := [...]string{"lobby", "roundInProgress", "winnerSelection", "endOfRound", "endOfGame"}
+	if int(p) < 0 || int(p) >= len(options) {
+		return nil, errors.New("invalid game phase")
+	}
 	result = []byte(options[p])
 	return
 }
 
-func (p *GamePhase) UnmarshalJSON(input []byte) (err error) {
-	switch input {
+// UnmarshalJSON attempts to deserialise phase from a JSON string.
+func (p *Phase) UnmarshalJSON(input []byte) (err error) {
+	switch string(input) {
 	case "lobby":
-		p = Lobby
+		*p = Lobby
 	case "roundInProgress":
-		p = RoundInProgress
+		*p = RoundInProgress
 	case "winnerSelection":
-		p = WinnerSelection
+		*p = WinnerSelection
 	case "endOfRound":
-		p = EndOfRound
+		*p = EndOfRound
 	case "endOfGame":
-		p = EndOfGame
+		*p = EndOfGame
 	default:
-		err = errors.Error("Invalid GamePhase value")
+		err = errors.New("invalid Phase value")
 	}
 	return
 }
 
-type User struct {
-	Id       int
-	Username string
-}
-
+// Player represents a user who has joined a game.
 type Player struct {
-	User  *User
-	Hand  []AnswerCard
-	Score int
+	ID       int
+	Username string
+	Hand     []*AnswerCard
+	Score    int
 }
 
+// Game represents the state of a single game.
 type Game struct {
-	Id        int
-	Decks     []Deck
-	GamePhase GamePhase
+	ID        int
+	Decks     []*Deck
+	Phase     Phase
 	MaxPoints int
 	Name      string
 	PlayDeck  PlayDeck
@@ -68,79 +80,84 @@ type Game struct {
 	Round     *Round
 }
 
+// Start moves the game state to `InProgress` and deals
+// cards to joined players.
 func (g *Game) Start() (err error) {
 	if g.MaxPoints < 1 {
 		return errors.New("max points not set")
 	}
 
-	if err = (&g.PlayDeck).Init(g.PlayDeck); err != nil {
-		return
-	}
+	g.PlayDeck.Init(g.Decks[0])
 
 	g.DealAll(DefaultHandSize)
-	g.GamePhase = RoundInProgress
+	g.Phase = RoundInProgress
+	card, err := g.PlayDeck.DrawQuestion()
 	g.Round = &Round{
-		Czar:     g.Players[0],
-		Question: g.QuestionDeck[len(g.QuestionDeck)-1],
+		Czar:     &g.Players[0],
+		Question: card,
 	}
-	g.QuestionDeck = g.QuestionDeck[len(g.QuestionDeck)-1]
+	return
 }
 
-func shuffle(vals []interface{}) {
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-	for n := len(vals); n > 0; n-- {
-		randIndex := r.Intn(n)
-		vals[n-1], vals[randIndex] = vals[randIndex], vals[n-1]
-	}
-}
-
+// DealAll deals cards to all joined players.
 func (g *Game) DealAll(upTo int) {
 	for _, player := range g.Players {
-		g.Deal(&player)
+		g.Deal(&player, 1)
 	}
 }
 
+// Deal deals cards to a single player.
 func (g *Game) Deal(player *Player, upTo int) {
 	numNew := len(player.Hand) - upTo
 	for i := 0; i < numNew; i++ {
-		card, err := g.PlayDeck.AnswerDeck.Draw()
+		card, err := g.PlayDeck.DrawAnswer()
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		player.Gain(card)
+		player.Hand = append(player.Hand, card)
 	}
 }
 
-func (p *Player) Gain(card AnswerCard) (err error) {
-	player.Hand = append(player.Hand, card)
-}
-
-func (p *Player) Draw(source AnswerSource) {
-	card, _ := source.Draw()
-	player.Hand = append(player.Hand, card)
-}
-
-func (p *Player) Discard(discard AnswerDiscard, id int) (err error) {
-	for i := 0; i < len(p.Hand); i++ {
-		card := p.Hand[i]
-		if card.Id == id {
-			p.Hand = p.Hand[:i] + p.Hand[:i+1]
-			discard.Discard(card)
-			return
-		}
-	}
-	return errors.New("card with id not in hand")
-}
-
+// Round represents the state of the current game round.
 type Round struct {
 	CardSubmissions []CardSubmission
-	Czar            Player
-	Question        QuestionCard
+	Czar            *Player
+	Question        *QuestionCard
 	Winner          *Player
 }
 
+// CardSubmission represents a player's submission for their
+// answer to the Czar's question.
 type CardSubmission struct {
 	Cards  []AnswerCard
 	Player *Player
+}
+
+// SetMaxPoints changes the number of points required to win
+// the game.
+//
+// Will fail if the game is outside the lobby phase or if
+// the value isn't in the range [3, 10].
+func (g *Game) SetMaxPoints(maxPoints int) (err error) {
+	if maxPoints < 3 {
+		return errors.New("cannot have max points under 3")
+	} else if maxPoints >= 10 {
+		return errors.New("cannot have max points above 10")
+	}
+
+	g.MaxPoints = maxPoints
+	return
+}
+
+// SetName changes the name of the game.
+//
+// Will fail if the game is outside the lobby phase.
+func (g *Game) SetName(name string) (err error) {
+	if g.Phase != Lobby {
+		return errors.New("can't change game name outside lobby phase")
+	}
+
+	g.Name = name
+	return
 }

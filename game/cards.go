@@ -86,7 +86,7 @@ func (d *CardDeck) Reshuffle() {
 }
 
 // Init sets up the PlayDeck by loading decks and emptying discard piles.
-func (p *PlayDeck) Init(deck Deck) {
+func (p *PlayDeck) Init(deck *Deck) {
 	questionCards := make([]interface{}, 0, len(deck.QuestionCards))
 	for card := range deck.QuestionCards {
 		questionCards = append(questionCards, card)
