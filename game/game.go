@@ -75,9 +75,26 @@ type Game struct {
 	Phase     Phase
 	MaxPoints int
 	Name      string
+	Owner     Player
+	Password  string
 	PlayDeck  PlayDeck
 	Players   []Player
 	Round     *Round
+}
+
+// Create attempts to create a new game.
+func Create(id int, name, password string) (game *Game, err error) {
+	if len(name) < 4 {
+		return nil, errors.New("game name must be at least 4 characters")
+	}
+
+	game = &Game{
+		ID:       id,
+		Name:     name,
+		Password: password,
+	}
+
+	return game, nil
 }
 
 // Start moves the game state to `InProgress` and deals
