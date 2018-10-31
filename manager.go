@@ -23,18 +23,19 @@ type Hub struct {
 	unregister chan *Client
 }
 
-// NewHub creates a Hub instance to manage clients.
-func NewHub() (hub *Hub) {
-	return &Hub{
-		clients:    make(map[*Client]User),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-	}
-}
-
 // Run starts up the Hub instance and listens for
 // client requests.
 func (h *Hub) Run() {
+	if h.clients == nil {
+		h.clients = make(map[*Client]User)
+	}
+	if h.register == nil {
+		h.register = make(chan *Client)
+	}
+	if h.unregister == nil {
+		h.unregister = make(chan *Client)
+	}
+
 	for {
 		select {
 		case client := <-h.register:
