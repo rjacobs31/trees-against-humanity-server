@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -39,7 +38,10 @@ func main() {
 	r := mux.NewRouter()
 	apiRouter := r.PathPrefix("/api").Subrouter()
 
-	apiRouter.HandleFunc("/ws", handleWebsocket)
+	hub := &Hub{}
+	hub.Run()
+	apiRouter.HandleFunc("/ws", handleWebsocket(hub))
+
 	apiRouter.Handle("/test", negroni.New(
 		negroni.HandlerFunc(authMiddleware.HandlerWithNext),
 		negroni.Wrap(http.HandlerFunc(handleTest)),
@@ -63,22 +65,8 @@ func handleTest(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"message": "This was a triumph."}`))
 }
 
-func handleWebsocket(w http.ResponseWriter, r *http.Request) {
-	conn, _ := upgrader.Upgrade(w, r, nil) // error ignored for sake of simplicity
-
-	for {
-		// Read message from browser
-		msgType, msg, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-
-		// Print the message to the console
-		fmt.Printf("%s sent: %s\n", conn.RemoteAddr(), string(msg))
-
-		// Write message back to browser
-		if err = conn.WriteMessage(msgType, msg); err != nil {
-			return
-		}
+func handleWebsocket(hub *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
 	}
 }
