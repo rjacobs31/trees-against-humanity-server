@@ -2,34 +2,55 @@ package main
 
 import (
 	"errors"
+
 	"github.com/gorilla/websocket"
 	"github.com/rjacobs31/trees-against-humanity-server/game"
 )
 
-// Manager controls all of the active games and users
+// Hub controls all of the active games and users
 // connected to them.
-type Manager struct {
+type Hub struct {
 	Users       map[int]User
+	clients     map[*Client]User
 	Games       map[int]game.Game
 	userCounter int
 	gameCounter int
+
+	// Registers clients.
+	register chan *Client
+
+	// Unregisters cliens.
+	unregister chan *Client
 }
 
-// User represents a single user and their connection
-// to the server.
-//
-// Currently, the user should die with the connection.
-type User struct {
-	ID         int
-	Connection *websocket.Conn
-	Username   string
+// NewHub creates a Hub instance to manage clients.
+func NewHub() (hub *Hub) {
+	return &Hub{
+		clients:    make(map[*Client]User),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+	}
+}
+
+// Run starts up the Hub instance and listens for
+// client requests.
+func (h *Hub) Run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = User{Client: client}
+		case client := <-h.unregister:
+			delete(h.clients, client)
+			close(client.send)
+		}
+	}
 }
 
 // AddUser attempts to insert a user into the map of active
 // users for the `Manager`.
 //
 // The username must not already be in use.
-func (m *Manager) AddUser(username string, conn *websocket.Conn) (err error) {
+func (h *Hub) AddUser(username string, conn *websocket.Conn) (err error) {
 	if conn == nil {
 		return errors.New("user must have a websocket connection")
 	}
@@ -38,17 +59,15 @@ func (m *Manager) AddUser(username string, conn *websocket.Conn) (err error) {
 		return errors.New("username must be at least 4 characters")
 	}
 
-	for _, u := range m.Users {
+	for _, u := range h.Users {
 		if u.Username == username {
 			return errors.New("username already taken")
 		}
 	}
 
-	m.userCounter++
-	m.Users[m.userCounter] = User{
-		ID:         m.userCounter,
-		Connection: conn,
-		Username:   username,
+	h.userCounter++
+	h.Users[h.userCounter] = User{
+		Username: username,
 	}
 
 	return nil
@@ -56,19 +75,18 @@ func (m *Manager) AddUser(username string, conn *websocket.Conn) (err error) {
 
 // RemoveUser attempts to remove a user from the
 // collection of active users.
-func (m *Manager) RemoveUser(id int) (err error) {
+func (h *Hub) RemoveUser(id int) (err error) {
 	if id <= 0 {
 		return errors.New("must specify an ID above 0")
 	}
 
-	user, ok := m.Users[id]
+	_, ok := h.Users[id]
 
 	if !ok {
 		return errors.New("user to remove does not exist")
 	}
 
-	delete(m.Users, id)
-	user.Connection.Close()
+	delete(h.Users, id)
 
 	return nil
 }
@@ -77,15 +95,15 @@ func (m *Manager) RemoveUser(id int) (err error) {
 // games for the `Manager`.
 //
 // The game name must not already be in use.
-func (m *Manager) AddGame(userID int, name, password string) (err error) {
-	_, ok := m.Users[userID]
+func (h *Hub) AddGame(userID int, name, password string) (err error) {
+	_, ok := h.Users[userID]
 	if !ok {
 		return errors.New("invalid owner ID")
 	}
 
-	m.gameCounter++
-	m.Games[m.gameCounter] = game.Game{
-		ID:       m.gameCounter,
+	h.gameCounter++
+	h.Games[h.gameCounter] = game.Game{
+		ID:       h.gameCounter,
 		Name:     name,
 		Password: password,
 	}
@@ -95,13 +113,13 @@ func (m *Manager) AddGame(userID int, name, password string) (err error) {
 
 // RemoveGame attempts to remove a game from the
 // collection of active games.
-func (m *Manager) RemoveGame(id int) (err error) {
-	_, ok := m.Games[id]
+func (h *Hub) RemoveGame(id int) (err error) {
+	_, ok := h.Games[id]
 	if !ok {
 		return errors.New("invalid game ID")
 	}
 
-	delete(m.Games, id)
+	delete(h.Games, id)
 
 	return nil
 }
