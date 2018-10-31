@@ -39,7 +39,7 @@ func main() {
 	apiRouter := r.PathPrefix("/api").Subrouter()
 
 	hub := &Hub{}
-	hub.Run()
+	go hub.Run()
 	apiRouter.HandleFunc("/ws", handleWebsocket(hub))
 
 	apiRouter.Handle("/test", negroni.New(
