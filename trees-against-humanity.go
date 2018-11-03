@@ -36,11 +36,12 @@ func main() {
 	authMiddleware := auth.Auth0Middleware(*aud, *iss, *authDomain)
 
 	r := mux.NewRouter()
-	apiRouter := r.PathPrefix("/api").Subrouter()
 
 	hub := &Hub{}
 	go hub.Run()
-	apiRouter.HandleFunc("/ws", handleWebsocket(hub))
+	r.HandleFunc("/ws", handleWebsocket(hub))
+
+	apiRouter := r.PathPrefix("/api").Subrouter()
 
 	apiRouter.Handle("/test", negroni.New(
 		negroni.HandlerFunc(authMiddleware.HandlerWithNext),
