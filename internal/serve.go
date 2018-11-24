@@ -51,7 +51,7 @@ func mainRouter() (r *mux.Router) {
 	go hub.Run()
 	r.HandleFunc("/ws", handleWebsocket(hub))
 
-	r.Handle("/static", http.FileServer(http.Dir("./web/static/")))
+	r.Handle("/static", http.StripPrefix("/static", http.FileServer(http.Dir("./web/static/"))))
 
 	r.HandleFunc("/", rootHandler())
 
