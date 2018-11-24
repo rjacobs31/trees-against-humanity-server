@@ -19,20 +19,11 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// Serve initialises a TAH server instance at the
+// indicated address and accepting the indicated
+// origins
 func Serve(addr, allowedOrigins string) {
-	r := mux.NewRouter()
-
-	hub := &Hub{}
-	go hub.Run()
-	r.HandleFunc("/ws", handleWebsocket(hub))
-
-	apiRouter := r.PathPrefix("/api").Subrouter()
-
-	apiRouter.Handle("/test", http.HandlerFunc(handleTest))
-
-	r.Handle("/static", http.FileServer(http.Dir("./web/static/")))
-
-	r.HandleFunc("/", rootHandler())
+	r := mainRouter()
 
 	customHandlers := handlers.CORS(
 		handlers.AllowedOrigins(strings.Split(allowedOrigins, ",")),
@@ -48,6 +39,23 @@ func Serve(addr, allowedOrigins string) {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+func mainRouter() (r *mux.Router) {
+	r = mux.NewRouter()
+
+	apiRouter := r.PathPrefix("/api").Subrouter()
+	apiRouter.Handle("/test", http.HandlerFunc(handleTest))
+
+	hub := &Hub{}
+	go hub.Run()
+	r.HandleFunc("/ws", handleWebsocket(hub))
+
+	r.Handle("/static", http.FileServer(http.Dir("./web/static/")))
+
+	r.HandleFunc("/", rootHandler())
+
+	return r
 }
 
 func rootHandler() http.HandlerFunc {
