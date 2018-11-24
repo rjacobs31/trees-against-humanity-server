@@ -29,8 +29,12 @@ var serveCmd = &cobra.Command{
 	Short: "Starts a Trees Against Humanity server instance",
 	Run: func(cmd *cobra.Command, args []string) {
 		addr := ":" + strconv.Itoa(viper.GetInt("port"))
-		origins := viper.GetString("allowed-origins")
-		internal.Serve(addr, origins)
+		origins := viper.GetStringSlice("allowed-origins")
+		config := internal.ServeConfig{
+			Address:        addr,
+			AllowedOrigins: origins,
+		}
+		internal.Serve(config)
 	},
 }
 
@@ -38,8 +42,10 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	serveCmd.Flags().IntP("port", "p", 8000, "Port of the TAH server")
-	serveCmd.Flags().String("allowed-origins", "*", "Allowed origins according to CORS standard")
+	serveCmd.Flags().StringArray("allowed-origins", []string{"*"}, "Allowed origins according to CORS standard")
+	serveCmd.Flags().StringP("secret", "s", "secret-key", "Key used for encrypting session data")
 
 	viper.BindPFlag("port", serveCmd.Flags().Lookup("port"))
 	viper.BindPFlag("allowed-origins", serveCmd.Flags().Lookup("allowed-origins"))
+	viper.BindPFlag("secret", serveCmd.Flags().Lookup("secret"))
 }

@@ -5,5 +5,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{{block "title" .}}Trees Against Humanity{{if .Title}} - {{.Title}}{{end}}{{end}}</title>
 	</head>
+    {{if .Username}}
+    <p>Hi, {{.Username}}</p>
+    <a href="/logout">Log out</a>
+    {{else}}
+    <a href="/login">Log in</a>
+    {{end}}
 	<body>{{block "main" .}}Hi. I'm an empty block.{{end}}</body>
 </html>

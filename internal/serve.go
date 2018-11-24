@@ -5,12 +5,13 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"strings"
 
+	"github.com/boltdb/bolt"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/rjacobs31/trees-against-humanity-server/internal/api"
+	"github.com/yosssi/boltstore/store"
 )
 
 const templateDir string = "./web/template/"
@@ -23,29 +24,50 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// ServeConfig specifies options for configuring
+// the Serve command.
+type ServeConfig struct {
+	Address        string
+	AllowedOrigins []string
+	SessionSecret  string
+}
+
 // Serve initialises a TAH server instance at the
 // indicated address and accepting the indicated
 // origins
-func Serve(addr, allowedOrigins string) {
-	r := mainRouter()
+func Serve(config ServeConfig) {
+	db, err := bolt.Open("./sessions.db", 0660, nil)
+	if err != nil {
+		log.Fatal("Open BoltDB: ", err)
+	}
+
+	str, err := store.New(db, store.Config{}, []byte(config.SessionSecret))
+	if err != nil {
+		log.Fatal("Open session store: ", err)
+	}
+
+	r, err := mainRouter(str)
+	if err != nil {
+		log.Fatal("Open router: ", err)
+	}
 
 	customHandlers := handlers.CORS(
-		handlers.AllowedOrigins(strings.Split(allowedOrigins, ",")),
+		handlers.AllowedOrigins(config.AllowedOrigins),
 		handlers.AllowedHeaders([]string{"Access-Control-Allow-Headers", "Authorization"}),
 	)
 	server := http.Server{
-		Addr:    addr,
+		Addr:    config.Address,
 		Handler: customHandlers(r),
 	}
 
-	log.Println("Starting server at:", addr)
-	err := server.ListenAndServe()
+	log.Println("Starting server at:", config.Address)
+	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }
 
-func mainRouter() (r *mux.Router) {
+func mainRouter(str *store.Store) (r *mux.Router, err error) {
 	r = mux.NewRouter()
 
 	apiRouter := r.PathPrefix("/api").Subrouter()
@@ -57,40 +79,83 @@ func mainRouter() (r *mux.Router) {
 
 	r.Handle("/static", http.StripPrefix("/static", http.FileServer(http.Dir("./web/static/"))))
 
-	r.HandleFunc("/login", loginHandler()).Methods("GET")
+	r.HandleFunc("/login", loginHandler(str))
+	r.HandleFunc("/logout", logoutHandler(str))
 
-	r.HandleFunc("/", rootHandler())
+	r.HandleFunc("/", rootHandler(str))
 
-	return r
+	return r, nil
 }
 
-func rootHandler() http.HandlerFunc {
+func rootHandler(str *store.Store) http.HandlerFunc {
 	tmpl, err := parseTemplate("index.gohtml")
 	if err != nil {
 		log.Fatal("Could not parse root template: ", err)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		session, _ := str.Get(r, "session-name")
+		name, _ := session.Values["username"].(string)
+
 		w.Header().Set("Content-Type", "text/html")
-		err := tmpl.Execute(w, struct{ Title string }{Title: ""})
+		data := templateValues{
+			Username: name,
+		}
+		err := tmpl.Execute(w, data)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
 
-func loginHandler() http.HandlerFunc {
+func loginHandler(str *store.Store) http.HandlerFunc {
 	tmpl, err := parseTemplate("login.gohtml")
 	if err != nil {
 		log.Fatal("Could not parse login template: ", err)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		session, _ := str.Get(r, "session-name")
+		name, ok := session.Values["username"].(string)
+
+		if r.Method == "POST" {
+			enteredName := r.FormValue("username")
+			if enteredName == "" {
+				session.AddFlash("Invalid name")
+				http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
+				return
+			} else {
+				session.Values["username"] = r.FormValue("username")
+				session.Save(r, w)
+				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+				return
+			}
+		} else if r.Method == "GET" && ok && name != "" {
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
 		w.Header().Set("Content-Type", "text/html")
-		err = tmpl.Execute(w, struct{ Title string }{Title: "Login"})
+		data := templateValues{
+			Title:    "Login",
+			Username: name,
+		}
+		err = tmpl.Execute(w, data)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+	}
+}
+
+func logoutHandler(str *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, _ := str.Get(r, "session-name")
+		name, ok := session.Values["username"].(string)
+		if ok && name != "" {
+			delete(session.Values, "username")
+			session.Save(r, w)
+		}
+		http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
 	}
 }
 
@@ -104,4 +169,9 @@ func parseTemplate(fileName string) (tmpl *template.Template, err error) {
 	filePath := path.Join(templateDir, fileName)
 	basePath := path.Join(templateDir, "base.gohtml")
 	return tmpl.ParseFiles(basePath, filePath)
+}
+
+type templateValues struct {
+	Title    string
+	Username string
 }
