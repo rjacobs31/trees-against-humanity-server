@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/gorilla/handlers"
@@ -11,6 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rjacobs31/trees-against-humanity-server/internal/api"
 )
+
+const templateDir string = "./web/template/"
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
@@ -54,20 +57,37 @@ func mainRouter() (r *mux.Router) {
 
 	r.Handle("/static", http.StripPrefix("/static", http.FileServer(http.Dir("./web/static/"))))
 
+	r.HandleFunc("/login", loginHandler()).Methods("GET")
+
 	r.HandleFunc("/", rootHandler())
 
 	return r
 }
 
 func rootHandler() http.HandlerFunc {
-	tmpl, err := template.ParseFiles("./web/template/index.gohtml")
+	tmpl, err := parseTemplate("index.gohtml")
 	if err != nil {
-		return nil
+		log.Fatal("Could not parse root template: ", err)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		err := tmpl.Execute(w, struct{}{})
+		err := tmpl.Execute(w, struct{ Title string }{Title: ""})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+func loginHandler() http.HandlerFunc {
+	tmpl, err := parseTemplate("login.gohtml")
+	if err != nil {
+		log.Fatal("Could not parse login template: ", err)
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		err = tmpl.Execute(w, struct{ Title string }{Title: "Login"})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -78,4 +98,10 @@ func handleWebsocket(hub *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ServeWs(hub, w, r)
 	}
+}
+
+func parseTemplate(fileName string) (tmpl *template.Template, err error) {
+	filePath := path.Join(templateDir, fileName)
+	basePath := path.Join(templateDir, "base.gohtml")
+	return tmpl.ParseFiles(basePath, filePath)
 }
