@@ -15,6 +15,8 @@
 package cmd
 
 import (
+	"strconv"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -26,7 +28,9 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Starts a Trees Against Humanity server instance",
 	Run: func(cmd *cobra.Command, args []string) {
-		internal.Serve(":"+viper.GetString("port"), viper.GetString("allowed-origins"))
+		addr := ":" + strconv.Itoa(viper.GetInt("port"))
+		origins := viper.GetString("allowed-origins")
+		internal.Serve(addr, origins)
 	},
 }
 
@@ -34,7 +38,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	serveCmd.Flags().IntP("port", "p", 8000, "Port of the TAH server")
-	serveCmd.Flags().String("allowed-orgins", "*", "Allowed origins according to CORS standard")
+	serveCmd.Flags().String("allowed-origins", "*", "Allowed origins according to CORS standard")
 
 	viper.BindPFlag("port", serveCmd.Flags().Lookup("port"))
 	viper.BindPFlag("allowed-origins", serveCmd.Flags().Lookup("allowed-origins"))
