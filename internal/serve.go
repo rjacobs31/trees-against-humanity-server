@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"html/template"
 	"log"
 	"net/http"
 	"strings"
@@ -29,19 +30,38 @@ func Serve(addr, allowedOrigins string) {
 
 	apiRouter.Handle("/test", http.HandlerFunc(handleTest))
 
+	r.Handle("/static", http.FileServer(http.Dir("./web/static/")))
+
+	r.HandleFunc("/", rootHandler())
+
 	customHandlers := handlers.CORS(
 		handlers.AllowedOrigins(strings.Split(allowedOrigins, ",")),
 		handlers.AllowedHeaders([]string{"Access-Control-Allow-Headers", "Authorization"}),
 	)
-	http.Handle("/", customHandlers(r))
+	server := http.Server{
+		Addr:    addr,
+		Handler: customHandlers(r),
+	}
 
 	log.Println("Starting server at:", addr)
-	server := http.Server{
-		Addr: addr,
-	}
 	err := server.ListenAndServe()
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
+	}
+}
+
+func rootHandler() http.HandlerFunc {
+	tmpl, err := template.ParseFiles("./web/template/index.gohtml")
+	if err != nil {
+		return nil
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		err := tmpl.Execute(w, struct{}{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
