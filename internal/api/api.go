@@ -4,14 +4,18 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/rjacobs31/trees-against-humanity-server/internal/middleware"
 )
 
 // Setup adds all API routes to given router.
-func Setup(router *mux.Router) {
+func Setup(router *mux.Router, store sessions.Store) {
+	mustAuth := middleware.MustAuth(store)
+
 	router.Handle("/test", http.HandlerFunc(handleTest))
 
-	router.HandleFunc("/games", getGames).Methods("GET")
-	router.HandleFunc("/games", createGame).Methods("POST")
+	router.HandleFunc("/games", mustAuth(getGames)).Methods("GET")
+	router.HandleFunc("/games", mustAuth(createGame)).Methods("POST")
 }
 
 func handleTest(w http.ResponseWriter, r *http.Request) {
