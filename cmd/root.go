@@ -16,6 +16,8 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Execute attempts to carry out the commands specified
+// as arguments.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
