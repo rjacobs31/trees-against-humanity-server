@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/rjacobs31/trees-against-humanity-server/internal/api"
 )
 
 var upgrader = websocket.Upgrader{
@@ -45,7 +46,7 @@ func mainRouter() (r *mux.Router) {
 	r = mux.NewRouter()
 
 	apiRouter := r.PathPrefix("/api").Subrouter()
-	apiRouter.Handle("/test", http.HandlerFunc(handleTest))
+	api.Setup(apiRouter)
 
 	hub := &Hub{}
 	go hub.Run()
@@ -71,12 +72,6 @@ func rootHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
-}
-
-func handleTest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write([]byte(`{"message": "This was a triumph."}`))
 }
 
 func handleWebsocket(hub *Hub) http.HandlerFunc {
