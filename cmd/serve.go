@@ -15,10 +15,10 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/rjacobs31/trees-against-humanity-server/internal"
 )
 
 // serveCmd represents the serve command
@@ -26,7 +26,7 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Starts a Trees Against Humanity server instance",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("serve called")
+		internal.Serve(":"+viper.GetString("port"), viper.GetString("allowed-origins"))
 	},
 }
 

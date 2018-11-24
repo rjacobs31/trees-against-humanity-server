@@ -1,10 +1,11 @@
-package main
+package internal
 
 import (
 	"errors"
 
 	"github.com/gorilla/websocket"
-	"github.com/rjacobs31/trees-against-humanity-server/game"
+
+	"github.com/rjacobs31/trees-against-humanity-server/internal/game"
 )
 
 // Hub controls all of the active games and users
