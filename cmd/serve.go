@@ -30,9 +30,11 @@ var serveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		addr := ":" + strconv.Itoa(viper.GetInt("port"))
 		origins := viper.GetStringSlice("allowed-origins")
+		secret := viper.GetString("secret")
 		config := internal.ServeConfig{
 			Address:        addr,
 			AllowedOrigins: origins,
+			SessionSecret:  secret,
 		}
 		internal.Serve(config)
 	},

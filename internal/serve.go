@@ -124,12 +124,12 @@ func loginHandler(str *store.Store) http.HandlerFunc {
 				session.AddFlash("Invalid name")
 				http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
 				return
-			} else {
-				session.Values["username"] = r.FormValue("username")
-				session.Save(r, w)
-				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-				return
 			}
+
+			session.Values["username"] = enteredName
+			session.Save(r, w)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
 		} else if r.Method == "GET" && ok && name != "" {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
