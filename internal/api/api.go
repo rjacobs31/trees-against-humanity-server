@@ -13,6 +13,7 @@ import (
 // Setup adds all API routes to given router.
 func Setup(router *mux.Router, store sessions.Store) {
 	mustAuth := middleware.MustAuth(store)
+	rm := RoomManager{store: store}
 
 	router.Handle("/test", http.HandlerFunc(handleTest))
 
@@ -20,8 +21,8 @@ func Setup(router *mux.Router, store sessions.Store) {
 	router.HandleFunc("/login", sesh.handleLogin).Headers("Content-Type", "application/json")
 	router.HandleFunc("/logout", sesh.handleLogout)
 
-	router.HandleFunc("/games", mustAuth(getGames)).Methods("GET")
-	router.HandleFunc("/games", mustAuth(createGame)).Methods("POST")
+	router.HandleFunc("/games", rm.HandleGetRooms).Methods("GET")
+	router.HandleFunc("/games", mustAuth(rm.HandleCreateRoom)).Methods("POST")
 }
 
 type sessionHandler struct {
@@ -81,14 +82,4 @@ func handleTest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 	w.Write([]byte(`{"message": "This was a triumph."}`))
-}
-
-func getGames(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte("[]"))
-}
-
-func createGame(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	http.Error(w, `{"error":"Could not create game"}`, http.StatusBadRequest)
 }

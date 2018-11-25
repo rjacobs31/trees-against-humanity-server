@@ -21,7 +21,7 @@ func MustAuth(store sessions.Store) Middleware {
 				http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
 				return
 			}
-			f(w, r)
+			f.ServeHTTP(w, r)
 		}
 	}
 }
